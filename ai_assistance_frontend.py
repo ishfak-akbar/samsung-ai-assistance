@@ -13,6 +13,10 @@ st.markdown("""
     .stApp {
         <!-- background-color: #ffffff; -->
     }
+    [data-testid="stChatInput"] > div:focus-within {
+        border: 2px solid #00a0e9 !important;
+        box-shadow: 0 0 5px rgba(0, 160, 233, 0.5) !important;
+    }
     .user-message {
         width: fit-content;
         background-color: #252524;
@@ -22,6 +26,7 @@ st.markdown("""
         margin: 8px 0;
         max-width: 70%;
         margin-left: auto;
+        border-right: 3px solid #808080;
     }
     .samsung-message {
         background-color: #2346a6;
@@ -31,7 +36,7 @@ st.markdown("""
         margin: 8px 0;
         max-width: 70%;
         margin-right: auto;
-        border-left: 4px solid #1428a0;
+        border-left: 4px solid #C4C4C4;
     }
     .samsung-header {
         background: linear-gradient(135deg, #1428a0, #00a0e9);
@@ -41,6 +46,17 @@ st.markdown("""
         text-align: center;
         margin-bottom: 20px;
         margin-top:-50px;
+    }
+    .streaming-message {
+        background-color: #2346a6;
+        color: #ffffff;
+        padding: 12px 16px;
+        border-radius: 15px 15px 15px 0px;
+        margin: 8px 0;
+        max-width: 70%;
+        margin-right: auto;
+        border-left: 3px solid #ffffff;
+        min-height: 50px;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -98,15 +114,34 @@ if user_input:
     st.session_state.message_history.append({'role': 'user', 'content': user_input})
     st.markdown(f'<div class="user-message">{user_input}</div>', unsafe_allow_html=True)
     
-    with st.spinner("Samsung Expert is thinking..."):
-        try:
-            response = chatbot.invoke({'messages': [HumanMessage(content=user_input)]}, config=CONFIG)
-            samsung_response = response['messages'][-1].content
-        except Exception as e:
-            samsung_response = f"I apologize, but I'm experiencing technical difficulties. Please try again or contact Samsung support directly. Error: {str(e)}"
+    response_placeholder = st.empty()
     
-    st.session_state.message_history.append({'role': 'assistant', 'content': samsung_response})
-    st.markdown(f'<div class="samsung-message">{samsung_response}</div>', unsafe_allow_html=True)
+    try:
+        full_response = ""
+        
+        for message_chunk, metadata in chatbot.stream(
+            {'messages': [HumanMessage(content=user_input)]},
+            config=CONFIG,
+            stream_mode='messages'
+        ):
+            if hasattr(message_chunk, 'content'):
+                full_response += message_chunk.content
+                response_placeholder.markdown(
+                    f'<div class="streaming-message">{full_response}</div>', 
+                    unsafe_allow_html=True
+                )
+
+        st.session_state.message_history.append({'role': 'assistant', 'content': full_response})
+        
+        response_placeholder.markdown(
+            f'<div class="samsung-message">{full_response}</div>', 
+            unsafe_allow_html=True
+        )
+        
+    except Exception as e:
+        error_message = f"I apologize, but I'm experiencing technical difficulties. Please try again or contact Samsung support directly. Error: {str(e)}"
+        st.session_state.message_history.append({'role': 'assistant', 'content': error_message})
+        st.markdown(f'<div class="samsung-message">{error_message}</div>', unsafe_allow_html=True)
 
 with st.sidebar:
     st.header("📞 Samsung Resources")
