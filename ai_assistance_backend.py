@@ -28,7 +28,7 @@ tools = [
     Tool(
         name="find_service_center", 
         func=find_service_center,
-        description="Find nearest Samsung service centers. Input: location like 'Delhi' or 'Mumbai'"
+        description="Find nearest Samsung service centers. Input: location like 'Sylhet' or 'Dhaka'"
     ),
     Tool(
         name="check_product_availability",
