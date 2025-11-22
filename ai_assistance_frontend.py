@@ -58,6 +58,17 @@ st.markdown("""
         border-left: 3px solid #ffffff;
         min-height: 50px;
     }
+    .tool-message {
+        background-color: #28a745;
+        color: white;
+        padding: 10px 14px;
+        border-radius: 10px;
+        margin: 5px 0;
+        max-width: 80%;
+        margin-right: auto;
+        border-left: 4px solid #1e7e34;
+        font-style: italic;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -97,6 +108,8 @@ with col4:
 for message in st.session_state.message_history:
     if message['role'] == 'user':
         st.markdown(f'<div class="user-message">{message["content"]}</div>', unsafe_allow_html=True)
+    elif message['role'] == 'tool': 
+        st.markdown(f'<div class="tool-message">🔧 {message["content"]}</div>', unsafe_allow_html=True)
     else:
         st.markdown(f'<div class="samsung-message">{message["content"]}</div>', unsafe_allow_html=True)
 

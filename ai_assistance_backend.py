@@ -4,7 +4,38 @@ from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from langchain_groq import ChatGroq
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph.message import add_messages
+from langchain_core.tools import Tool
 import os
+
+def check_warranty(__arg1: str) -> str:  
+    device_model = __arg1
+    return f"📋 Warranty status for {device_model}: Active until December 2025. 1 year manufacturer warranty remaining."
+
+def find_service_center(__arg1: str) -> str:
+    location = __arg1
+    return f"📍 Nearest Samsung service centers in {location}:\n• Samsung Plaza Downtown (2.3 km)\n• Authorized Service Partner Mall (4.1 km)\n• QuickFix Mobile Repair (1.8 km)"
+
+def check_product_availability(__arg1: str) -> str:
+    product_name = __arg1
+    return f"📦 {product_name} availability:\n• Galaxy S24: In stock\n• Galaxy Buds3: Limited stock\n• Galaxy Watch6: Available"
+
+tools = [
+    Tool(
+        name="check_warranty",
+        func=check_warranty,
+        description="Check Samsung device warranty status. Input: device model like 'Galaxy S23'"
+    ),
+    Tool(
+        name="find_service_center", 
+        func=find_service_center,
+        description="Find nearest Samsung service centers. Input: location like 'Delhi' or 'Mumbai'"
+    ),
+    Tool(
+        name="check_product_availability",
+        func=check_product_availability,
+        description="Check availability of Samsung products. Input: product name like 'Galaxy S24'"
+    )
+]
 
 class ChatState(TypedDict):
     messages: Annotated[list[BaseMessage], add_messages]
@@ -17,6 +48,8 @@ llm = ChatGroq(
     model="llama-3.1-8b-instant", 
     temperature=0.7
 )
+
+llm_with_tools = llm.bind_tools(tools)
 
 samsung_system_prompt = SystemMessage(content="""You are an official Samsung Product Expert assistant. Your role is to help users with:
 
@@ -66,18 +99,49 @@ Start by welcoming users as a Samsung Expert and asking how you can help with th
 
 def chat_node(state: ChatState):
     messages = state['messages']
-    
     all_messages = [samsung_system_prompt] + messages
-    
-    response = llm.invoke(all_messages)
+    response = llm_with_tools.invoke(all_messages) 
     return {'messages': [response]}
+
+def tool_node(state: ChatState):
+    last_message = state['messages'][-1]
+    
+    results = []
+    for tool_call in last_message.tool_calls:
+        tool_function = next((tool for tool in tools if tool.name == tool_call['name']), None)
+        if tool_function:
+            try:
+                result = tool_function.func(**tool_call['args'])
+                results.append(f"Tool Result: {result}")
+            except Exception as e:
+                results.append(f"ool error: {str(e)}")
+    
+    return {'messages': [HumanMessage(content="\n".join(results))]}
+
+def route_tools(state: ChatState):
+    last_message = state['messages'][-1]
+    
+    if hasattr(last_message, 'tool_calls') and last_message.tool_calls:
+        return "use_tools"
+    
+    return "continue_chat"
 
 
 checkpointer = MemorySaver()
 graph = StateGraph(ChatState)
 
 graph.add_node('chat_node', chat_node)
+graph.add_node('tool_node', tool_node)
+
 graph.add_edge(START, 'chat_node')
-graph.add_edge('chat_node', END)
+graph.add_conditional_edges(
+    'chat_node',
+    route_tools,
+    {
+        "use_tools": "tool_node",  
+        "continue_chat": END        
+    }
+)
+graph.add_edge('tool_node', 'chat_node') 
 
 chatbot = graph.compile(checkpointer=checkpointer)
